@@ -193,6 +193,6 @@ Scan the entire vault and report:
 ## Skills
 
 Load these skills based on context:
-- `.claude/skills/obsidian-markdown.md` — Obsidian markdown formatting rules
-- `.claude/skills/capture-processing.md` — Detailed processing pipeline for raw input
-- `.claude/skills/query-review.md` — Search, review, and reporting procedures
+- `skills/obsidian-markdown.md` — Obsidian markdown formatting rules
+- `skills/capture-processing.md` — Detailed processing pipeline for raw input
+- `skills/query-review.md` — Search, review, and reporting procedures

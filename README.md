@@ -59,9 +59,11 @@ npm run build
 
 ## Setup: Claude Code
 
-### Option A: Global (all projects)
+Two steps: register the MCP server, then install the skills.
 
-Add to your `~/.claude/settings.json`:
+### 1. Register the MCP server
+
+**Global (all projects)** — add to `~/.claude/settings.json`:
 
 ```jsonc
 {
@@ -73,65 +75,45 @@ Add to your `~/.claude/settings.json`:
   }
 }
 ```
+
+**Per-project** — add to `.mcp.json` in your project root (same format).
 
 Replace `/absolute/path/to/CF-Second-Brain` with the actual path where you cloned the repo.
 
-### Option B: Per-project
+### 2. Install the skills
 
-Add to `.mcp.json` in your project root:
-
-```jsonc
-{
-  "mcpServers": {
-    "second-brain": {
-      "command": "node",
-      "args": ["/absolute/path/to/CF-Second-Brain/dist/server.js"]
-    }
-  }
-}
-```
-
-### Adding the AI Skill (recommended)
-
-The skill teaches Claude how to use the second brain tools automatically. Copy it into your Claude skills directory:
+The `skills/` directory teaches Claude the `sb` prefix, auto-classification, and vault formatting rules. Symlink it into your Claude skills directory so it stays in sync with the repo:
 
 ```bash
-mkdir -p ~/.claude/skills/second-brain
-cp skill/SKILL.md ~/.claude/skills/second-brain/SKILL.md
+ln -s /absolute/path/to/CF-Second-Brain/skills ~/.claude/skills/second-brain
 ```
 
-With the skill installed, you can use the natural `sb` prefix:
+This creates `~/.claude/skills/second-brain/` pointing to the repo's `skills/` folder. All skill files (`SKILL.md`, `capture-processing.md`, `obsidian-markdown.md`, `query-review.md`) are loaded automatically in every project.
 
-```
-sb went with PostgreSQL over DynamoDB for the user store
-sb what did we decide about caching?
-sb what's pending?
-```
+### Verify
 
-Without the skill, you can still use the tools directly — Claude will see them as MCP tools — but the `sb` shorthand and auto-classification won't work as smoothly.
-
-After configuring, restart Claude Code. Run any conversation and check that the tools appear:
+Restart Claude Code and test:
 
 ```
 You: sb what's pending?
-AI:  No matching tasks found.    <-- this means it's working
+AI:  No matching tasks found.    <-- working
 ```
 
 ---
 
 ## Setup: Cursor
 
-### Option A: Global
+Two steps: register the MCP server, then install the rules.
 
-Open **Cursor Settings > MCP** and add a new server:
+### 1. Register the MCP server
+
+**Global** — open **Cursor Settings > MCP** and add:
 
 - **Name**: `second-brain`
 - **Type**: `command`
 - **Command**: `node /absolute/path/to/CF-Second-Brain/dist/server.js`
 
-### Option B: Per-project
-
-Create `.cursor/mcp.json` in your project root:
+**Per-project** — create `.cursor/mcp.json` in your project root:
 
 ```json
 {
@@ -144,16 +126,18 @@ Create `.cursor/mcp.json` in your project root:
 }
 ```
 
-### Adding Cursor Rules (recommended)
+### 2. Install the rules
 
-For Cursor to use the tools naturally with the `sb` prefix, add a rule file:
+The repo includes a Cursor-compatible rule file (`skills/second-brain.mdc`). Symlink it into your project's rules directory:
 
 ```bash
 mkdir -p .cursor/rules
-cp skill/SKILL.md .cursor/rules/second-brain.mdc
+ln -s /absolute/path/to/CF-Second-Brain/skills/second-brain.mdc .cursor/rules/second-brain.mdc
 ```
 
-Or copy the content of `skill/SKILL.md` into your project's `.cursorrules` file.
+This teaches Cursor the `sb` prefix, auto-classification, and how to call the MCP tools correctly.
+
+> **Tip:** If your team shares a project, add the symlink command to your project's setup docs so everyone gets the rule automatically.
 
 ---
 
@@ -266,17 +250,19 @@ By default, the vault lives at `<repo-root>/vault/`. To use a different location
 
 This is useful if you want your vault in a synced folder (iCloud, Dropbox) or shared across machines.
 
-### Claude Code skills
+### Skills and rules
 
-The repo includes additional skills in `.claude/skills/` that enhance how Claude processes your vault content:
+All skills live in the `skills/` directory at the repo root — one source of truth for both editors:
 
-| Skill | Purpose |
-|-------|---------|
-| `capture-processing.md` | Detailed pipeline for processing raw input into structured entries |
-| `obsidian-markdown.md` | Obsidian-flavored markdown formatting rules |
-| `query-review.md` | Search, review, and reporting procedures |
+| File | For | Purpose |
+|------|-----|---------|
+| `SKILL.md` | Claude Code | Main skill — `sb` prefix, auto-classification, tool parameters |
+| `second-brain.mdc` | Cursor | Same behavior, Cursor `.mdc` format |
+| `capture-processing.md` | Both | Detailed pipeline for processing raw input into structured entries |
+| `obsidian-markdown.md` | Both | Obsidian-flavored markdown formatting rules |
+| `query-review.md` | Both | Search, review, and reporting procedures |
 
-These are automatically loaded when you use the repo as a Claude Code project. For global use, copy them to `~/.claude/skills/second-brain/`.
+Because you symlink (not copy), updates to the repo are picked up automatically — just `git pull`.
 
 ---
 
