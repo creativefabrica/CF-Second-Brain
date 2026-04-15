@@ -12,6 +12,9 @@ import { searchVaultTool } from "./tools/search-vault.js";
 import { getPendingTasks } from "./tools/get-pending-tasks.js";
 import { getVaultContext } from "./tools/get-vault-context.js";
 import { updateIndex } from "./tools/update-index.js";
+import { updateTask } from "./tools/update-task.js";
+import { updateDecision } from "./tools/update-decision.js";
+import { weeklyReview } from "./tools/weekly-review.js";
 
 const server = new McpServer({
   name: "second-brain",
@@ -130,6 +133,56 @@ server.tool(
   },
   async (params) => {
     const result = getVaultContext(params);
+    return { content: [{ type: "text", text: result }] };
+  }
+);
+
+// ── update_task ────────────────────────────────────────────────────
+
+server.tool(
+  "update_task",
+  "Update an existing task in the vault. Find by name or slug, then update status, priority, due date, or append a note.",
+  {
+    name: z.string().describe("Task name, slug, or search term to find the task"),
+    status: z.string().optional().describe("New status: open, in-progress, blocked, done, cancelled"),
+    priority: z.string().optional().describe("New priority: p0-critical, p1-high, p2-medium, p3-low"),
+    waiting_on: z.string().optional().describe("Who/what this task is blocked on (empty string to clear)"),
+    due: z.string().optional().describe("New due date in YYYY-MM-DD format (empty string to clear)"),
+    note: z.string().optional().describe("Note to append as a dated update section"),
+  },
+  async (params) => {
+    const result = updateTask(params);
+    return { content: [{ type: "text", text: result }] };
+  }
+);
+
+// ── update_decision ────────────────────────────────────────────────
+
+server.tool(
+  "update_decision",
+  "Update an existing decision in the vault. Change status (active/superseded/revisit), link to superseding decision, or append a note.",
+  {
+    name: z.string().describe("Decision name, slug, or search term to find the decision"),
+    status: z.string().optional().describe("New status: active, superseded, revisit"),
+    superseded_by: z.string().optional().describe("Name/slug of the decision that supersedes this one (auto-sets status to superseded)"),
+    note: z.string().optional().describe("Note to append as a dated update section"),
+  },
+  async (params) => {
+    const result = updateDecision(params);
+    return { content: [{ type: "text", text: result }] };
+  }
+);
+
+// ── weekly_review ──────────────────────────────────────────────────
+
+server.tool(
+  "weekly_review",
+  "Generate a weekly review: scan all vault entries for a given week, compile stats (decisions, tasks, meetings, stale items, orphans), and save to vault/weekly/YYYY-WXX.md.",
+  {
+    week: z.string().optional().describe("Target week in YYYY-WXX format (e.g. 2026-W16). Defaults to current week."),
+  },
+  async (params) => {
+    const result = weeklyReview(params);
     return { content: [{ type: "text", text: result }] };
   }
 );

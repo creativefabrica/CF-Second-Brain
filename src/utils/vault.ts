@@ -222,3 +222,42 @@ export function buildEntryPath(
   const prefix = type === "meeting" ? `${date}-meeting-` : `${date}-`;
   return path.join(dirForType(type), `${prefix}${slug}.md`);
 }
+
+/**
+ * Find an entry by name, slug, or partial match within a content type.
+ * Tries exact slug match first, then substring match on filenames.
+ */
+export function findEntry(
+  type: ContentType,
+  nameOrSlug: string
+): VaultEntry | null {
+  const entries = listByType(type);
+  const query = nameOrSlug.toLowerCase().trim();
+  const querySlug = slugify(nameOrSlug);
+
+  // 1. Exact slug match
+  const exact = entries.find((e) => e.name === querySlug);
+  if (exact) return exact;
+
+  // 2. Filename contains the slug
+  const slugMatch = entries.find((e) => e.name.includes(querySlug));
+  if (slugMatch) return slugMatch;
+
+  // 3. Filename contains the raw query (spaces replaced with hyphens)
+  const normalized = query.replace(/\s+/g, "-");
+  const normalizedMatch = entries.find((e) => e.name.includes(normalized));
+  if (normalizedMatch) return normalizedMatch;
+
+  // 4. Body or frontmatter contains the query
+  const contentMatch = entries.find((e) => {
+    const text =
+      e.name.toLowerCase() +
+      " " +
+      JSON.stringify(e.parsed.frontmatter).toLowerCase() +
+      " " +
+      e.parsed.body.toLowerCase();
+    return text.includes(query);
+  });
+
+  return contentMatch ?? null;
+}
