@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Second Brain — Vault Stats</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      padding: 2rem;
+      line-height: 1.5;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      color: #8b949e;
+      font-size: 0.875rem;
+      margin-bottom: 2rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+
+    .card h2 {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+
+    .card.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .metric-row {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 2rem;
+    }
+
+    .metric {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      min-width: 140px;
+      flex: 1;
+    }
+
+    .metric .value {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .metric .label {
+      font-size: 0.75rem;
+      color: #8b949e;
+      margin-top: 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .metric .delta {
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+    }
+
+    .delta.up { color: #3fb950; }
+    .delta.down { color: #f85149; }
+    .delta.neutral { color: #8b949e; }
+
+    .chart-container {
+      position: relative;
+      height: 240px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    th {
+      text-align: left;
+      color: #8b949e;
+      font-weight: 500;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #30363d;
+    }
+
+    td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .badge-decision { background: #1f3a5f; color: #58a6ff; }
+    .badge-task { background: #2d1f3a; color: #bc8cff; }
+    .badge-meeting { background: #1f3a2d; color: #3fb950; }
+    .badge-person { background: #3a2d1f; color: #d29922; }
+    .badge-project { background: #3a1f1f; color: #f85149; }
+
+    .health-bar {
+      display: flex;
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+
+    .health-bar span {
+      transition: width 0.3s ease;
+    }
+
+    .guide {
+      margin-bottom: 2rem;
+      cursor: default;
+    }
+
+    .guide summary {
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #58a6ff;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .guide summary::before {
+      content: '?';
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #1f3a5f;
+      color: #58a6ff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .guide[open] summary {
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid #30363d;
+    }
+
+    .guide-content {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .guide-section h3 {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #e6edf3;
+      margin-bottom: 0.5rem;
+    }
+
+    .guide-section p {
+      font-size: 0.8125rem;
+      color: #8b949e;
+      margin-bottom: 0.5rem;
+    }
+
+    .guide-section ul {
+      font-size: 0.8125rem;
+      color: #8b949e;
+      padding-left: 1.25rem;
+      margin: 0;
+    }
+
+    .guide-section li {
+      margin-bottom: 0.375rem;
+    }
+
+    .guide-section em {
+      color: #e6edf3;
+      font-style: italic;
+    }
+
+    .guide-signal {
+      font-weight: 600;
+      font-size: 0.75rem;
+    }
+
+    .guide-signal-green { color: #3fb950; }
+    .guide-signal-red { color: #f85149; }
+
+    .empty-state {
+      text-align: center;
+      color: #8b949e;
+      padding: 3rem 1rem;
+    }
+
+    .empty-state p {
+      margin-top: 0.5rem;
+      font-size: 0.875rem;
+    }
+
+    .snapshot-nav {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+
+    .snapshot-nav button {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 0.375rem 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8125rem;
+    }
+
+    .snapshot-nav button:hover { background: #30363d; }
+    .snapshot-nav button.active {
+      background: #1f6feb;
+      border-color: #1f6feb;
+    }
+
+    .snapshot-nav .spacer { flex: 1; }
+    .snapshot-nav .info { color: #8b949e; font-size: 0.8125rem; }
+  </style>
+</head>
+<body>
+  <h1>Second Brain — Vault Stats</h1>
+  <p class="subtitle" id="subtitle">Loading...</p>
+
+  <!-- How to Read This Dashboard -->
+  <details class="card guide" id="guide">
+    <summary>How to read this dashboard</summary>
+    <div class="guide-content">
+      <div class="guide-section">
+        <h3>Metric Cards (top row)</h3>
+        <p>Snapshot of the latest vault state. Each card shows the current value and a <strong>delta</strong> vs the previous snapshot.</p>
+        <ul>
+          <li><strong>Total entries</strong> — everything in the vault. Growth means you're using it. Flat means the habit isn't sticking.</li>
+          <li><strong>Decisions</strong> — choices with rationale. <em>This is the highest-value content.</em> If this stays at 0 while tasks grow, you're using the vault as a todo list instead of a knowledge base.</li>
+          <li><strong>Tasks</strong> — things to do. Compare with Stale count — if tasks grow but stale also grows, you're capturing but not reviewing.</li>
+          <li><strong>Meetings</strong> — post-meeting dumps. One meeting save auto-extracts decisions + tasks, so this is the most efficient content type.</li>
+          <li><strong>Stale (&gt;14d)</strong> — open tasks untouched for 2+ weeks. <span class="guide-signal guide-signal-green">Green (down)</span> = you're resolving things. <span class="guide-signal guide-signal-red">Red (up)</span> = the vault is becoming a graveyard.</li>
+          <li><strong>Overdue</strong> — tasks past their due date. Should always be 0. If it grows, either do the task, extend the date, or cancel it.</li>
+        </ul>
+      </div>
+
+      <div class="guide-section">
+        <h3>Distribution Over Time (line chart)</h3>
+        <p>Shows how each content type grows across snapshots. <strong>What to look for:</strong></p>
+        <ul>
+          <li><em>Healthy:</em> multiple lines growing — you're capturing decisions, tasks, and meetings.</li>
+          <li><em>Unhealthy:</em> only the purple (tasks) line grows — the vault duplicates your issue tracker instead of complementing it.</li>
+          <li><em>Goal:</em> the blue (decisions) line should grow proportionally. Decisions are the hardest to reconstruct later and the most valuable to have recorded.</li>
+        </ul>
+      </div>
+
+      <div class="guide-section">
+        <h3>Task Health Over Time (stacked bar)</h3>
+        <p>Each bar shows the full breakdown of task statuses at that snapshot. <strong>What to look for:</strong></p>
+        <ul>
+          <li><em>Healthy:</em> grey (open) shrinks over time as items move to in-progress or get completed. The bar height stays stable or shrinks.</li>
+          <li><em>Unhealthy:</em> the bar only grows taller — you keep adding tasks but never resolve them. Red (overdue/stale) segments appearing means decay.</li>
+          <li><em>Blocked growing:</em> you have dependencies on other people. Check <code>waiting_on</code> fields and follow up.</li>
+        </ul>
+      </div>
+
+      <div class="guide-section">
+        <h3>Type Ratio (doughnut)</h3>
+        <p>Current distribution as a percentage. <strong>Targets:</strong></p>
+        <ul>
+          <li>Tasks &lt;50% of total — otherwise you're just building another inbox.</li>
+          <li>Decisions &gt;20% — this is where the real value lives.</li>
+          <li>Meetings present — if 0, you're not capturing post-meeting context (the highest-leverage content type).</li>
+          <li>People + Projects &gt;0 — means the knowledge graph has nodes to connect things through.</li>
+        </ul>
+      </div>
+
+      <div class="guide-section">
+        <h3>Growth Rate (bar chart)</h3>
+        <p>Net new entries between snapshots. <strong>What to look for:</strong></p>
+        <ul>
+          <li><em>Steady bars:</em> the <code>sb</code> habit is sticking.</li>
+          <li><em>Bars trending to 0:</em> you stopped using the vault. Ask why — too much friction? Wrong content types?</li>
+          <li><em>Spikes:</em> usually a meeting dump that created many entries at once. Normal and healthy.</li>
+        </ul>
+        <p>Requires 2+ snapshots to display.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3>Snapshot Comparison (table)</h3>
+        <p>Raw numbers side by side for every snapshot. Use this to compare Week 1 vs Week 3 at a glance. The divider separates distribution metrics (top) from task health metrics (bottom).</p>
+      </div>
+
+      <div class="guide-section">
+        <h3>Recent Entries</h3>
+        <p>The entries from the latest snapshot. Check the type badges — if something looks miscategorized (e.g., a research note labeled as "task"), that's a signal to adjust how you phrase <code>sb</code> inputs.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3>The core question this dashboard answers</h3>
+        <p><strong>"Am I building a knowledge graph, or just another inbox?"</strong></p>
+        <p>A knowledge graph has: decisions with rationale, meetings with extracted context, people as connection points, projects as hubs. An inbox has: a growing list of tasks you'll never look at again.</p>
+      </div>
+    </div>
+  </details>
+
+  <div class="metric-row" id="metrics"></div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Distribution Over Time</h2>
+      <div class="chart-container">
+        <canvas id="distributionChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Task Health Over Time</h2>
+      <div class="chart-container">
+        <canvas id="taskHealthChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Type Ratio (Latest)</h2>
+      <div class="chart-container">
+        <canvas id="ratioChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Growth Rate</h2>
+      <div class="chart-container">
+        <canvas id="growthChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card full-width">
+      <h2>Snapshot Comparison</h2>
+      <div id="comparisonTable"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card full-width">
+      <h2>Recent Entries (Latest Snapshot)</h2>
+      <div id="entriesTable"></div>
+    </div>
+  </div>
+
+  <script>
+    let DATA = null;
+
+    async function loadData() {
+      try {
+        const res = await fetch('./history.json');
+        DATA = await res.json();
+      } catch {
+        // Fallback: try to find embedded data
+        const el = document.getElementById('embedded-data');
+        if (el) {
+          DATA = JSON.parse(el.textContent);
+        }
+      }
+
+      if (!DATA || !DATA.snapshots || DATA.snapshots.length === 0) {
+        document.body.innerHTML = `
+          <div class="empty-state">
+            <h1>No data yet</h1>
+            <p>Run <code>sb stats</code> in Claude Code to generate your first snapshot.</p>
+          </div>`;
+        return;
+      }
+
+      render();
+    }
+
+    function render() {
+      const snaps = DATA.snapshots;
+      const latest = snaps[snaps.length - 1];
+      const prev = snaps.length > 1 ? snaps[snaps.length - 2] : null;
+
+      document.getElementById('subtitle').textContent =
+        `${snaps.length} snapshot${snaps.length > 1 ? 's' : ''} — ${snaps[0].date} to ${latest.date}`;
+
+      renderMetrics(latest, prev);
+      renderDistributionChart(snaps);
+      renderTaskHealthChart(snaps);
+      renderRatioChart(latest);
+      renderGrowthChart(snaps);
+      renderComparisonTable(snaps);
+      renderEntriesTable(latest);
+    }
+
+    function delta(current, previous, inverse = false) {
+      if (previous === null || previous === undefined) return '<span class="delta neutral">baseline</span>';
+      const diff = current - previous;
+      if (diff === 0) return '<span class="delta neutral">no change</span>';
+      const cls = inverse
+        ? (diff > 0 ? 'down' : 'up')
+        : (diff > 0 ? 'up' : 'down');
+      const sign = diff > 0 ? '+' : '';
+      return `<span class="delta ${cls}">${sign}${diff}</span>`;
+    }
+
+    function renderMetrics(latest, prev) {
+      const d = latest.distribution;
+      const t = latest.task_health;
+      const pd = prev ? prev.distribution : null;
+      const pt = prev ? prev.task_health : null;
+
+      const metrics = [
+        { value: d.total, label: 'Total entries', d: delta(d.total, pd?.total) },
+        { value: d.decisions, label: 'Decisions', d: delta(d.decisions, pd?.decisions) },
+        { value: d.tasks, label: 'Tasks', d: delta(d.tasks, pd?.tasks) },
+        { value: d.meetings, label: 'Meetings', d: delta(d.meetings, pd?.meetings) },
+        { value: t.stale, label: 'Stale (>14d)', d: delta(t.stale, pt?.stale, true) },
+        { value: t.overdue, label: 'Overdue', d: delta(t.overdue, pt?.overdue, true) },
+      ];
+
+      document.getElementById('metrics').innerHTML = metrics.map(m => `
+        <div class="metric">
+          <div class="value">${m.value}</div>
+          <div class="label">${m.label}</div>
+          <div>${m.d}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderDistributionChart(snaps) {
+      const ctx = document.getElementById('distributionChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: snaps.map(s => s.date),
+          datasets: [
+            {
+              label: 'Decisions',
+              data: snaps.map(s => s.distribution.decisions),
+              borderColor: '#58a6ff',
+              backgroundColor: '#58a6ff22',
+              fill: true,
+              tension: 0.3,
+            },
+            {
+              label: 'Tasks',
+              data: snaps.map(s => s.distribution.tasks),
+              borderColor: '#bc8cff',
+              backgroundColor: '#bc8cff22',
+              fill: true,
+              tension: 0.3,
+            },
+            {
+              label: 'Meetings',
+              data: snaps.map(s => s.distribution.meetings),
+              borderColor: '#3fb950',
+              backgroundColor: '#3fb95022',
+              fill: true,
+              tension: 0.3,
+            },
+          ],
+        },
+        options: chartOptions('Count'),
+      });
+    }
+
+    function renderTaskHealthChart(snaps) {
+      const ctx = document.getElementById('taskHealthChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: snaps.map(s => s.date),
+          datasets: [
+            {
+              label: 'Open',
+              data: snaps.map(s => s.task_health.open),
+              backgroundColor: '#8b949e',
+            },
+            {
+              label: 'In Progress',
+              data: snaps.map(s => s.task_health.in_progress),
+              backgroundColor: '#58a6ff',
+            },
+            {
+              label: 'Blocked',
+              data: snaps.map(s => s.task_health.blocked),
+              backgroundColor: '#d29922',
+            },
+            {
+              label: 'Overdue',
+              data: snaps.map(s => s.task_health.overdue),
+              backgroundColor: '#f85149',
+            },
+            {
+              label: 'Stale',
+              data: snaps.map(s => s.task_health.stale),
+              backgroundColor: '#f8514966',
+              borderColor: '#f85149',
+              borderWidth: 1,
+            },
+          ],
+        },
+        options: {
+          ...chartOptions('Count'),
+          scales: {
+            ...chartOptions('Count').scales,
+            x: { ...chartOptions('Count').scales.x, stacked: true },
+            y: { ...chartOptions('Count').scales.y, stacked: true },
+          },
+        },
+      });
+    }
+
+    function renderRatioChart(latest) {
+      const d = latest.distribution;
+      const ctx = document.getElementById('ratioChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Decisions', 'Tasks', 'Meetings', 'People', 'Projects'],
+          datasets: [{
+            data: [d.decisions, d.tasks, d.meetings, d.people, d.projects],
+            backgroundColor: ['#58a6ff', '#bc8cff', '#3fb950', '#d29922', '#f85149'],
+            borderColor: '#161b22',
+            borderWidth: 2,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { color: '#8b949e', padding: 12, font: { size: 12 } },
+            },
+          },
+        },
+      });
+    }
+
+    function renderGrowthChart(snaps) {
+      if (snaps.length < 2) {
+        const container = document.getElementById('growthChart').parentElement;
+        container.innerHTML = '<p style="color:#8b949e;text-align:center;padding-top:100px;">Need 2+ snapshots to show growth</p>';
+        return;
+      }
+
+      const growth = snaps.slice(1).map((s, i) => ({
+        date: s.date,
+        new: s.distribution.total - snaps[i].distribution.total,
+      }));
+
+      const ctx = document.getElementById('growthChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: growth.map(g => g.date),
+          datasets: [{
+            label: 'New entries',
+            data: growth.map(g => g.new),
+            backgroundColor: '#3fb95088',
+            borderColor: '#3fb950',
+            borderWidth: 1,
+          }],
+        },
+        options: chartOptions('New entries'),
+      });
+    }
+
+    function renderComparisonTable(snaps) {
+      const container = document.getElementById('comparisonTable');
+
+      const headers = ['Metric', ...snaps.map(s => `${s.date}<br><span style="color:#8b949e;font-weight:400">${s.week}</span>`)];
+      const rows = [
+        ['Total', ...snaps.map(s => s.distribution.total)],
+        ['Decisions', ...snaps.map(s => s.distribution.decisions)],
+        ['Tasks', ...snaps.map(s => s.distribution.tasks)],
+        ['Meetings', ...snaps.map(s => s.distribution.meetings)],
+        ['People', ...snaps.map(s => s.distribution.people)],
+        ['Projects', ...snaps.map(s => s.distribution.projects)],
+        ['---'],
+        ['Open tasks', ...snaps.map(s => s.task_health.open)],
+        ['In progress', ...snaps.map(s => s.task_health.in_progress)],
+        ['Blocked', ...snaps.map(s => s.task_health.blocked)],
+        ['Overdue', ...snaps.map(s => s.task_health.overdue)],
+        ['Stale (>14d)', ...snaps.map(s => s.task_health.stale)],
+      ];
+
+      container.innerHTML = `
+        <table>
+          <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+          <tbody>
+            ${rows.map(r => {
+              if (r[0] === '---') return `<tr><td colspan="${headers.length}" style="border-bottom:2px solid #30363d;padding:0"></td></tr>`;
+              return `<tr>${r.map((c, i) => `<td${i === 0 ? ' style="font-weight:500"' : ''}>${c}</td>`).join('')}</tr>`;
+            }).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    function renderEntriesTable(latest) {
+      const container = document.getElementById('entriesTable');
+      if (!latest.entries || latest.entries.length === 0) {
+        container.innerHTML = '<p style="color:#8b949e">No entries recorded</p>';
+        return;
+      }
+
+      container.innerHTML = `
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Name</th></tr></thead>
+          <tbody>
+            ${latest.entries.map(e => `
+              <tr>
+                <td>${e.date}</td>
+                <td><span class="badge badge-${e.type}">${e.type}</span></td>
+                <td>${e.name}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    function chartOptions(yLabel) {
+      return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: { color: '#8b949e', padding: 12, font: { size: 11 } },
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: '#8b949e', font: { size: 11 } },
+            grid: { color: '#21262d' },
+          },
+          y: {
+            ticks: { color: '#8b949e', font: { size: 11 }, stepSize: 1 },
+            grid: { color: '#21262d' },
+            title: { display: true, text: yLabel, color: '#8b949e' },
+            beginAtZero: true,
+          },
+        },
+      };
+    }
+
+    loadData();
+  </script>
+</body>
+</html>

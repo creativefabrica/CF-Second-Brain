@@ -6,83 +6,64 @@ description: >
 license: Apache-2.0
 metadata:
   author: creative-mati
-  version: "1.0"
+  version: "2.0"
 allowed-tools: mcp__second-brain__*
 ---
 
 ## Activation
 
-This skill activates when:
-- User prefixes input with `sb` or `sb:` (e.g., `sb went with PostgreSQL over DynamoDB`)
-- User explicitly says "save to vault", "save to second brain", "log to vault"
-- User queries the vault: "what's in my vault about...", "vault: what's pending?"
+Prefix `sb` or `sb:` — e.g., `sb went with PostgreSQL over DynamoDB`
+Also: "save to vault", "save to second brain", "what's in my vault about..."
 
-**Does NOT activate on:** general conversation, code discussion, engram triggers. This is for the user's Obsidian knowledge base, not Claude's session memory.
+Does NOT activate on general conversation, code discussion, or engram triggers.
 
 ---
 
 ## Boundary with Engram
 
-| Engram | Second Brain Vault |
-|--------|-------------------|
-| Claude's memory for future sessions | User's Obsidian knowledge base |
-| Claude saves proactively | User triggers explicitly with `sb` |
-| Survives compaction | Survives as .md files in vault/ |
-| Read by Claude | Read by user in Obsidian (graph, search, backlinks) |
+| Engram | Vault |
+|--------|-------|
+| Claude's cross-session memory | User's Obsidian knowledge base |
+| Claude saves proactively | User triggers with `sb` |
+| Read by Claude | Read by user in Obsidian |
 
-When `sb` is used, save to vault via MCP. Do NOT also save to engram — they serve different audiences.
+`sb` → vault only. Never also save to engram.
 
 ---
 
 ## Auto-Classification
 
-When the user writes `sb <content>`, classify the content and route to the correct tool. The user should NEVER need to specify the type — you figure it out.
+Route to the correct tool based on content. The user never specifies the type.
 
-### Decision signals
-Words: "decided", "chose", "went with", "agreed on", "we're going with", "settled on", "picked", "committed to", "the call is", "over" + "because"
-
--> Call `save_decision`
-
-### Task signals
-Words: "need to", "should", "todo", "follow up", "don't forget", "look into", "investigate", "waiting on", "blocked by", "tech debt", "hack", "temporary", "revisit"
-
--> Call `save_task`
-
-### Meeting signals
-Words: "met with", "standup", "retro", "sync", "1:1", "planning", "review meeting", "kickoff", "demo", "post-mortem", multiple attendees + discussion topics
-
--> Call `save_meeting`
-
-### Mixed content
-A single dump can contain decisions + tasks + meeting notes. When this happens:
-1. If it reads like meeting notes -> call `save_meeting` (auto-extracts decisions and tasks)
-2. If it's a decision that also implies a task -> call `save_decision` AND `save_task`
-3. When in doubt -> call `save_note` (auto-classifies server-side)
-
-### No clear signal
-If the content has no strong signals, default to `save_note` — the server classifies it.
+- **Decision**: a choice was made between alternatives → `save_decision`
+- **Task**: work remains to be done → `save_task`
+- **Meeting**: people met and discussed topics → `save_meeting`
+- **Learning**: new concept, technique, tool, or insight absorbed from reading/watching/exploring → `save_note` with content structured as: what was learned, source, key takeaway, and how it connects to current work
+- **Mixed**: meeting notes containing decisions/tasks → `save_meeting` (server auto-extracts)
+- **Ambiguous**: → `save_note` (server classifies)
 
 ---
 
 ## Tool Parameters
 
 ### save_decision
+
 ```json
 {
-  "title": "Short descriptive title (you generate this)",
-  "content": "User's words, structured with markdown headings if needed",
+  "title": "Short searchable title (you generate)",
+  "content": "User's words, structured with markdown",
   "domain": ["backend", "architecture"],
   "participants": ["Carlos", "Priya"]
 }
 ```
-- **domain** values: `backend`, `frontend`, `infra`, `devops`, `architecture`, `security`, `testing`, `process`
-- **participants**: extract names from content. Include @mentions and explicit names.
-- Generate the **title** — the user won't provide one. Make it short and searchable.
+
+Domains: `backend`, `frontend`, `infra`, `devops`, `architecture`, `security`, `testing`, `process`
 
 ### save_task
+
 ```json
 {
-  "title": "Short descriptive title (you generate this)",
+  "title": "Short searchable title (you generate)",
   "content": "What needs to be done",
   "priority": "p2-medium",
   "status": "open",
@@ -92,128 +73,173 @@ If the content has no strong signals, default to `save_note` — the server clas
   "tags": ["frontend"]
 }
 ```
-Infer from content:
-- "waiting on..." -> status `blocked`, set `waiting_on`
-- "we should probably..." -> priority `p3-low`
-- "urgent / critical / ASAP" -> priority `p0-critical` or `p1-high`
-- "by Friday" -> convert to absolute date in `due`
-- Any URL in the text -> set as `source`
+
+Infer from content: "waiting on..." → blocked, "probably should..." → p3-low, "urgent" → p0/p1,
+relative dates → absolute YYYY-MM-DD, URLs → source.
 
 ### save_meeting
+
 ```json
 {
-  "title": "Meeting topic (you generate this)",
-  "content": "Full meeting notes — user's words",
+  "title": "Meeting topic (you generate)",
+  "content": "Full meeting notes",
   "attendees": ["Carlos", "Priya"],
   "project": "cf-web"
 }
 ```
-- Extract attendee names from content
-- Set `project` if a project/system is mentioned
-- This tool auto-extracts decisions and tasks — do NOT call those tools separately for items in the meeting content
+
+Server auto-extracts decisions and tasks — do NOT call those tools separately for meeting content.
 
 ### save_note
+
 ```json
-{
-  "content": "Raw text — server classifies it"
-}
+{ "content": "Raw text" }
 ```
-Fallback when classification is ambiguous.
 
 ### search_vault
+
 ```json
-{
-  "query": "search terms",
-  "type": "decision"
-}
+{ "query": "search terms", "type": "decision" }
 ```
-- `type` is optional: `decision`, `task`, `meeting`, `person`, `project`
-- Omit `type` to search everything
+
+Type optional: `decision`, `task`, `meeting`, `person`, `project`. Omit to search all.
 
 ### get_pending_tasks
+
 ```json
-{
-  "status": "blocked",
-  "priority": "p1-high"
-}
+{ "status": "blocked", "priority": "p1-high" }
 ```
-Both params optional. Defaults to all open/in-progress/blocked tasks.
+
+Both optional. Defaults to all open/in-progress/blocked.
 
 ### get_vault_context
+
 ```json
-{
-  "topic": "cf-web"
-}
+{ "topic": "cf-web" }
 ```
-Cross-vault synthesis across all content types.
 
 ### update_index
-```json
-{}
-```
-Rebuilds vault/index.md. Call after 3+ vault writes in one session.
+
+No params. Rebuilds vault/index.md.
 
 ---
 
 ## Query Patterns
 
-These also activate with `sb` prefix:
-
 | User writes | Action |
-|------------|--------|
-| `sb what did we decide about caching?` | `search_vault` with query "caching", type "decision" |
-| `sb what's pending?` | `get_pending_tasks` (no filters) |
-| `sb what's blocked?` | `get_pending_tasks` with status "blocked" |
-| `sb what do I know about cf-web?` | `get_vault_context` with topic "cf-web" |
+|---|---|
+| `sb what did we decide about caching?` | `search_vault` query "caching", type "decision" |
+| `sb what's pending?` | `get_pending_tasks` |
+| `sb what's blocked?` | `get_pending_tasks` status "blocked" |
+| `sb what do I know about cf-web?` | `get_vault_context` topic "cf-web" |
+| `sb stats` | Run vault health check (see Eval section) |
 | `sb reindex` | `update_index` |
+
+---
+
+## Vault Schema
+
+| Type | Directory | Naming | Key frontmatter |
+|---|---|---|---|
+| Decision | `vault/decisions/` | `YYYY-MM-DD-slug.md` | status (active/superseded/revisit), domain[], participants[] |
+| Task | `vault/tasks/` | `YYYY-MM-DD-slug.md` | status (open/in-progress/blocked/done), priority (p0-p3), due, waiting_on |
+| Meeting | `vault/meetings/` | `YYYY-MM-DD-topic.md` | attendees[], project |
+| Person | `vault/people/` | `name.md` | role, team, last_mentioned |
+| Project | `vault/projects/` | `name.md` | status, last_updated |
+| Weekly | `vault/weekly/` | `YYYY-WXX.md` | — |
+
+Use Obsidian wikilinks (`[[path/file|display]]`) for all internal references. High link density.
 
 ---
 
 ## Rules
 
-1. **Generate titles** — the user dumps raw text, you create a short searchable title
-2. **Preserve voice** — pass the user's actual words in `content`. Structure with headings, don't rewrite into corporate-speak
-3. **Convert relative dates** — "next Friday", "end of sprint" -> absolute YYYY-MM-DD
-4. **Extract entities** — names become `participants`/`attendees`, system names become `project`
-5. **Infer metadata** — priority, status, domain, tags from context. Don't ask the user.
-6. **Report back concisely** — after saving, list what was created (type, title, any stubs) in 1-2 lines per file
+1. **Generate titles** — user dumps raw text, you create a short searchable title
+2. **Preserve voice** — structure the user's words, don't rewrite into corporate-speak
+3. **Convert relative dates** → absolute YYYY-MM-DD
+4. **Extract entities** — names → participants/attendees, systems → project
+5. **Infer metadata** — priority, status, domain, tags from context. Don't ask.
+6. **Show inferred metadata** — after saving, one line per file created showing what you inferred (type, priority, domain, due date) so the user can catch misclassifications early
+
+---
+
+## Eval: `sb stats`
+
+When user types `sb stats`, build a vault health report AND persist it for tracking.
+
+### Step 1: Query
+
+1. `get_pending_tasks()` — count by status and priority
+2. `search_vault(query: "*", type: "decision")` — count decisions
+3. `search_vault(query: "*", type: "meeting")` — count meetings
+4. `search_vault(query: "*", type: "person")` — count people
+5. `search_vault(query: "*", type: "project")` — count projects
+
+### Step 2: Persist snapshot
+
+Read `vault/stats/history.json`, append a new snapshot, write it back:
+
+```json
+{
+  "date": "YYYY-MM-DD",
+  "week": "WXX",
+  "distribution": {
+    "decisions": N, "tasks": N, "meetings": N,
+    "people": N, "projects": N, "total": N
+  },
+  "task_health": {
+    "open": N, "in_progress": N, "blocked": N,
+    "overdue": N, "stale": N
+  },
+  "entries": [
+    { "date": "YYYY-MM-DD", "type": "task", "name": "short name" }
+  ]
+}
+```
+
+Stale = open/in-progress task older than 14 days from today.
+Overdue = task with `due` date in the past.
+
+### Step 3: Report
+
+Show the text report in conversation + deltas vs previous snapshot if one exists.
+End with: "Dashboard updated — open `vault/stats/dashboard.html` in a browser to compare visually."
+
+---
+
+## Session Hooks
+
+**First `sb` of a session**: after processing the user's request, also check for stale/overdue items.
+Call `get_pending_tasks` silently. If any are overdue or stale (>14 days), append a brief notice:
+
+```
+You have X overdue/stale tasks. Type `sb what's pending?` to review.
+```
+
+**After 3+ vault writes in a session**: call `update_index` automatically.
+
+---
+
+## Work Integration
+
+When the user starts work on a Jira ticket and you notice vault context might help:
+- `search_vault` for the ticket's domain or feature area
+- Surface relevant decisions or open tasks if found
+
+Passive — don't force it. Only surface when clearly relevant.
 
 ---
 
 ## Examples
 
-**User:** `sb met with carlos and priya about search. decided on elasticsearch over solr. need to set up staging cluster by friday.`
-
-**Action:** Call `save_meeting` with:
-- title: "Search service sync"
-- content: the full text
-- attendees: ["Carlos", "Priya"]
-
-The server extracts "decided on elasticsearch" as a decision file and "need to set up staging cluster" as a task file automatically.
-
----
-
-**User:** `sb went with tailwind over styled-components for the new dashboard. team agreed — better DX and smaller bundle.`
-
-**Action:** Call `save_decision` with:
-- title: "Tailwind over styled-components for dashboard"
-- content: the full text
-- domain: ["frontend"]
-- participants: []
-
----
+**User:** `sb went with tailwind over styled-components for the dashboard. better DX and smaller bundle.`
+→ `save_decision`: title "Tailwind over styled-components for dashboard", domain ["frontend"]
+→ Report: `Saved decision: "Tailwind over styled-components for dashboard" [frontend]`
 
 **User:** `sb need to migrate the old auth middleware before the compliance deadline march 30`
+→ `save_task`: title "Migrate old auth middleware", priority p1-high, due 2026-03-30, tags ["security"]
+→ Report: `Saved task: "Migrate old auth middleware" [p1-high, due 2026-03-30, security]`
 
-**Action:** Call `save_task` with:
-- title: "Migrate old auth middleware"
-- content: the full text
-- priority: "p1-high" (deadline implies importance)
-- due: "2026-03-30"
-- tags: ["security"]
-
----
-
-**User:** `sb the deploy pipeline takes 45 minutes, that's way too long`
-
-**Action:** Call `save_note` — ambiguous between task and observation, let server classify.
+**User:** `sb met with carlos and priya about search. decided on elasticsearch over solr. need staging cluster by friday.`
+→ `save_meeting`: title "Search service sync", attendees ["Carlos", "Priya"]
+→ Report: `Saved meeting: "Search service sync" [Carlos, Priya] — server will extract 1 decision + 1 task`
