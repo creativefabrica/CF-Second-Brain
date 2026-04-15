@@ -7,6 +7,9 @@ vault/projects/*.md
 vault/weekly/*.md
 vault/index.md
 
+# Stats snapshots (user-specific)
+vault/stats/history.json
+
 # Obsidian workspace files (user-specific)
 vault/.obsidian/workspace.json
 vault/.obsidian/workspace-mobile.json
